@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>インタラクティブストーリーゲーム</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Noto Sans JP', sans-serif;
+            overflow: hidden;
+            background-color: #fce4ec;
+            background-image: linear-gradient(45deg, #fce4ec 25%, #f8bbd0 25%, #f8bbd0 50%, #fce4ec 50%, #fce4ec 75%, #f8bbd0 75%, #f8bbd0 100%);
+            background-size: 56.57px 56.57px;
+        }
+        .game-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #scene-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .content-wrapper {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            height: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .text-container {
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 10px 0 0 0;
+            padding: 20px;
+        }
+        #game-title {
+            color: white;
+            margin: 0 0 15px 0;
+            font-size: 2em;
+            text-align: center;
+        }
+        #title-edit {
+            width: 100%;
+            padding: 5px;
+            font-size: 1.5em;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: none;
+            text-align: center;
+            display: none;
+            margin-bottom: 15px;
+        }
+        #story {
+            font-size: 1.2em;
+            line-height: 1.6;
+            color: white;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #choices {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 0 0 10px 10px;
+            padding: 20px;
+        }
+        .choice-btn {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            padding: 12px 20px;
+            border-radius: 30px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        .choice-btn:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-3px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        .mode-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .mode-btn:hover {
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        .image-upload, .audio-upload {
+            display: none;
+        }
+        .audio-controls {
+            display: none;
+        }
+        .color-picker {
+            display: none;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .color-picker label {
+            color: white;
+            margin-right: 10px;
+        }
+        .color-picker input[type="color"] {
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <img id="scene-image" src="/api/placeholder/1920/1080" alt="シーンイメージ">
+        <div class="content-wrapper">
+            <button id="mode-toggle" class="mode-btn">クリエイターモード</button>
+            <div class="text-container">
+                <h1 id="game-title">インタラクティブストーリーゲーム</h1>
+                <input type="text" id="title-edit" placeholder="新しいタイトルを入力">
+                <div class="color-picker">
+                    <label for="title-color">タイトル色:</label>
+                    <input type="color" id="title-color" value="#FFFFFF">
+                    <label for="button-color">ボタン色:</label>
+                    <input type="color" id="button-color" value="#FFFFFF">
+                </div>
+                <div id="story"></div>
+            </div>
+            <div id="choices"></div>
+            <div id="image-upload" class="image-upload">
+                <input type="file" id="image-upload-input" accept="image/*">
+            </div>
+            <div id="audio-upload" class="audio-upload">
+                <input type="file" id="audio-upload-input" accept="audio/*">
+            </div>
+            <div class="audio-controls">
+                <audio id="audio-player"></audio>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentScene = "start";
+        let isCreatorMode = false;
+        let elements = {};
+
+        const story = {
+            start: {
+                text: "あなたは学校の屋上で、クラスメイトの佐藤さんと出会いました。どうしますか？",
+                image: "/api/placeholder/1920/1080",
+                audio: null,
+                choices: [
+                    { text: "挨拶する", next: "greet" },
+                    { text: "黙って立ち去る", next: "leave" },
+                    { text: "一緒にお弁当を食べる誘う", next: "invite_lunch" },
+                    { text: "天気の話をする", next: "weather_talk" }
+                ],
+                titleColor: "#FFFFFF",
+                buttonColor: "rgba(255, 255, 255, 0.1)"
+            },
+            // 他のシーンも同様に定義...
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            elements = {
+                imageUpload: document.getElementById('image-upload-input'),
+                audioUpload: document.getElementById('audio-upload-input'),
+                sceneImage: document.getElementById('scene-image'),
+                audioPlayer: document.getElementById('audio-player'),
+                modeToggle: document.getElementById('mode-toggle'),
+                imageUploadDiv: document.getElementById('image-upload'),
+                audioUploadDiv: document.getElementById('audio-upload'),
+                gameTitle: document.getElementById('game-title'),
+                titleEdit: document.getElementById('title-edit'),
+                storyElement: document.getElementById("story"),
+                choicesDiv: document.getElementById("choices"),
+                audioControls: document.querySelector('.audio-controls'),
+                titleColorPicker: document.getElementById('title-color'),
+                buttonColorPicker: document.getElementById('button-color'),
+                colorPicker: document.querySelector('.color-picker')
+            };
+
+            elements.modeToggle.addEventListener('click', toggleCreatorMode);
+            elements.titleEdit.addEventListener('input', updateTitle);
+            elements.imageUpload.addEventListener('change', (e) => handleFileUpload(e, 'image'));
+            elements.audioUpload.addEventListener('change', (e) => handleFileUpload(e, 'audio'));
+            elements.titleColorPicker.addEventListener('input', updateTitleColor);
+            elements.buttonColorPicker.addEventListener('input', updateButtonColor);
+
+            showScene(currentScene);
+        });
+
+        function showScene(sceneName) {
+            if (!story.hasOwnProperty(sceneName)) {
+                console.error(`Scene "${sceneName}" not found in the story.`);
+                return;
+            }
+
+            currentScene = sceneName;
+            const scene = story[sceneName];
+            
+            elements.storyElement.textContent = scene.text;
+            elements.sceneImage.src = scene.image || "/api/placeholder/1920/1080";
+            
+            elements.gameTitle.style.color = scene.titleColor || "#FFFFFF";
+            elements.titleColorPicker.value = scene.titleColor || "#FFFFFF";
+            elements.buttonColorPicker.value = scene.buttonColor || "rgba(255, 255, 255, 0.1)";
+            
+            if (scene.audio && elements.audioPlayer) {
+                elements.audioPlayer.src = scene.audio;
+                elements.audioControls.style.display = 'block';
+                elements.audioPlayer.play().catch(error => console.log("音声の自動再生に失敗しました:", error));
+            } else {
+                elements.audioControls.style.display = 'none';
+                if (elements.audioPlayer) elements.audioPlayer.pause();
+            }
+
+            elements.choicesDiv.innerHTML = "";
+            scene.choices.forEach(choice => {
+                const button = document.createElement("button");
+                button.textContent = choice.text;
+                button.classList.add("choice-btn");
+                button.style.backgroundColor = scene.buttonColor || "rgba(255, 255, 255, 0.1)";
+                button.onclick = () => showScene(choice.next);
+                elements.choicesDiv.appendChild(button);
+            });
+        }
+
+        function toggleCreatorMode() {
+            isCreatorMode = !isCreatorMode;
+            elements.imageUploadDiv.style.display = isCreatorMode ? 'block' : 'none';
+            elements.audioUploadDiv.style.display = isCreatorMode ? 'block' : 'none';
+            elements.titleEdit.style.display = isCreatorMode ? 'block' : 'none';
+            elements.gameTitle.style.display = isCreatorMode ? 'none' : 'block';
+            elements.colorPicker.style.display = isCreatorMode ? 'block' : 'none';
+            elements.modeToggle.textContent = isCreatorMode ? 'プレイヤーモード' : 'クリエイターモード';
+        }
+
+        function updateTitle() {
+            elements.gameTitle.textContent = this.value || 'インタラクティブストーリーゲーム';
+        }
+
+        function updateTitleColor() {
+            elements.gameTitle.style.color = this.value;
+            story[currentScene].titleColor = this.value;
+        }
+
+        function updateButtonColor() {
+            const color = this.value;
+            story[currentScene].buttonColor = color;
+            document.querySelectorAll('.choice-btn').forEach(button => {
+                button.style.backgroundColor = color;
+            });
+        }
+
+        function handleFileUpload(event, type) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    if (type === 'image') {
+                        elements.sceneImage.src = e.target.result;
+                        story[currentScene].image = e.target.result;
+                    } else if (type === 'audio') {
+                        elements.audioPlayer.src = e.target.result;
+                        story[currentScene].audio = e.target.result;
+                        elements.audioControls.style.display = 'block';
+                    }
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+    </script>
+</body>
+</html>
